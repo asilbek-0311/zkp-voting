@@ -1,43 +1,53 @@
 pragma circom 2.0.0;
 
-// Include required circom libraries
 include "../node_modules/circomlib/circuits/poseidon.circom";
 include "../node_modules/circomlib/circuits/comparators.circom";
 
+// Circuit to verify a vote with Poseidon-based commitment
 template VoteVerifier() {
-    // Public inputs
+    // Public inputs (visible on-chain)
     signal input pollId;
     signal input optionIndex;
-    signal input nullifier; // Random value to prevent double voting
     
-    // Private inputs
-    signal input privateKey; // User's private key
-    signal input randomness; // Random value for generating commitment
+    // Private inputs (zero-knowledge)
+    signal input voterCommitment;   // Unique voter identifier
+    signal input secretSalt;        // Randomness for commitment
+    signal input randomness;        // Additional vote randomness
+    
+    // Components for verification
+    component commitmentHasher = Poseidon(2);
+    component voteHasher = Poseidon(4);
+    component nullifierHasher = Poseidon(3);
+    component optionValidator = LessThan(32);
+    
+    // Validate option index
+    optionValidator.in[0] <== optionIndex;
+    optionValidator.in[1] <== 1000; // Max options
+    optionValidator.out === 1;
+    
+    // Recreate voter commitment
+    commitmentHasher.inputs[0] <== voterCommitment;
+    commitmentHasher.inputs[1] <== secretSalt;
+    
+    // Create vote commitment
+    voteHasher.inputs[0] <== pollId;
+    voteHasher.inputs[1] <== optionIndex;
+    voteHasher.inputs[2] <== voterCommitment;
+    voteHasher.inputs[3] <== randomness;
+    
+    // Create nullifier to prevent double voting
+    nullifierHasher.inputs[0] <== pollId;
+    nullifierHasher.inputs[1] <== voterCommitment;
+    nullifierHasher.inputs[2] <== randomness;
     
     // Public outputs
-    signal output voteHash; // Hash of the vote
-    signal output nullifierHash; // Hash to prevent double voting
+    signal output voteCommitment;
+    signal output nullifierHash;
     
-    // Components
-    component poseidonVote = Poseidon(3);
-    component poseidonNullifier = Poseidon(2);
-    component validOption = LessThan(32); // Assuming max 2^32 options
-    
-    // Verify option index is valid (implemented in the contract)
-    validOption.in[0] <== optionIndex;
-    validOption.in[1] <== 1000; // Max number of options
-    validOption.out === 1;
-    
-    // Calculate vote hash
-    poseidonVote.inputs[0] <== pollId;
-    poseidonVote.inputs[1] <== optionIndex;
-    poseidonVote.inputs[2] <== randomness;
-    voteHash <== poseidonVote.out;
-    
-    // Calculate nullifier hash to prevent double voting
-    poseidonNullifier.inputs[0] <== pollId;
-    poseidonNullifier.inputs[1] <== privateKey;
-    nullifierHash <== poseidonNullifier.out;
+    // Assign outputs
+    voteCommitment <== voteHasher.out;
+    nullifierHash <== nullifierHasher.out;
 }
 
+// Make the circuit the main component
 component main = VoteVerifier();

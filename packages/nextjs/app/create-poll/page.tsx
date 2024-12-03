@@ -11,6 +11,7 @@ const CreatePoll = () => {
   const [options, setOptions] = useState(["", ""]); // Initial two options
   const [prompt, setPrompt] = useState("");
   const [timelimit, setTimelimit] = useState(0);
+  const [transactionHash, setTransactionHash] = useState<`0x${string}` | undefined>();
   const { writeContractAsync, isPending } = useScaffoldWriteContract("VotingZKP");
 
 //   const contract = useContract({
@@ -21,10 +22,16 @@ const CreatePoll = () => {
   const handleCreatePoll = async () => {
     // Call your contract's createPoll function here
     try {
-        await writeContractAsync({
+        const tx = await writeContractAsync({
           functionName: "createPoll",
           args: [pollTitle,prompt,options, BigInt(timelimit)],
         });
+        setTransactionHash(tx); // Store the transaction hash
+        // Clear input fields
+        setPollTitle("");
+        setOptions(["", ""]); // Reset to initial two options
+        setPrompt("");
+        setTimelimit(0);
     } catch (e) {
         // Handle success or error
         console.error("Error setting greeting", e);
@@ -78,6 +85,12 @@ const CreatePoll = () => {
         className="input w-1/2 mb-2"
       />
       <button onClick={handleCreatePoll} className="btn mt-4">Submit Poll</button>
+      {transactionHash && (
+        <div className="mt-4">
+          <h2>Transaction Hash:</h2>
+          <p>{transactionHash}</p>
+        </div>
+      )}
     </div>
   );
 };

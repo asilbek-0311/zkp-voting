@@ -14,19 +14,34 @@ contract VotingZKP {
         string[] options;
         uint256 endTime;
         bool exists;
+        address creator;
     }
     
     // Verifier contract for ZKP
     Groth16Verifier public verifier;
     
     mapping(uint256 => Poll) public polls;
+    // New mapping to track polls by creator
+    mapping(address => uint256[]) public pollsByCreator;
+
     mapping(bytes32 => bool) public nullifierHashes; // Track used nullifiers
     mapping(uint256 => mapping(uint256 => uint256)) public voteCounts;
     
     uint256 public pollCounter;
     
-    event PollCreated(uint256 pollId, string name, string prompt);
-    event VoteCast(uint256 pollId, bytes32 nullifierHash, uint256 optionIndex);
+    event PollCreated(
+        uint256 indexed pollId, 
+        address indexed creator, 
+        string name, 
+        string prompt,
+        uint256 endTime
+        );
+
+    event VoteCast(
+        uint256 pollId, 
+        bytes32 nullifierHash, 
+        uint256 optionIndex
+        );
     
     constructor(address _verifierAddress) {
         verifier = Groth16Verifier(_verifierAddress);
@@ -46,10 +61,12 @@ contract VotingZKP {
             prompt: _prompt,
             options: _options,
             endTime: block.timestamp + (_durationInMinutes * 1 minutes),
-            exists: true
+            exists: true,
+            creator: msg.sender
         });
+        pollsByCreator[msg.sender].push(pollId);
         
-        emit PollCreated(pollId, _name, _prompt);
+        emit PollCreated(pollId, msg.sender, _name, _prompt, block.timestamp + (_durationInMinutes * 1 minutes));
         console.log("poll name:", _name);
         return pollId;
     }
@@ -58,7 +75,7 @@ contract VotingZKP {
         uint256[2] memory a,
         uint256[2][2] memory b,
         uint256[2] memory c,
-        uint256[4] memory input // [pollId, optionIndex, voteHash, nullifierHash]
+        uint256[4] memory input // [pollId, optionIndex, voteCommitement, nullifierHash]
     ) public {
         require(polls[input[0]].exists, "Poll does not exist");
         require(block.timestamp < polls[input[0]].endTime, "Poll has ended");
@@ -85,22 +102,14 @@ contract VotingZKP {
         emit VoteCast(input[0], nullifierHash, input[1]);
     }
     
-    function getPoll(uint256 _pollId) public view returns (
-        string memory name,
-        string memory prompt,
-        string[] memory options,
-        uint256 endTime,
-        bool exists
-    ) {
+    // Existing function to get individual poll by ID
+    function getPollById(uint256 _pollId) public view returns (Poll memory) {
         require(polls[_pollId].exists, "Poll does not exist");
-        Poll storage poll = polls[_pollId];
-        return (
-            poll.name,
-            poll.prompt,
-            poll.options,
-            poll.endTime,
-            poll.exists
-        );
+        return polls[_pollId];
+    }
+     // New function to get polls by creator
+    function getPollsByCreator(address _creator) public view returns (uint256[] memory) {
+        return pollsByCreator[_creator];
     }
     
     function getVoteCounts(uint256 _pollId) public view returns (uint256[] memory) {

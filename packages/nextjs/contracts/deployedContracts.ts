@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   31337: {
     Groth16Verifier: {
-      address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+      address: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
       abi: [
         {
           inputs: [
@@ -47,7 +47,7 @@ const deployedContracts = {
       inheritedFunctions: {},
     },
     VotingZKP: {
-      address: "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+      address: "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
       abi: [
         {
           inputs: [
@@ -64,10 +64,16 @@ const deployedContracts = {
           anonymous: false,
           inputs: [
             {
-              indexed: false,
+              indexed: true,
               internalType: "uint256",
               name: "pollId",
               type: "uint256",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "creator",
+              type: "address",
             },
             {
               indexed: false,
@@ -80,6 +86,12 @@ const deployedContracts = {
               internalType: "string",
               name: "prompt",
               type: "string",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "endTime",
+              type: "uint256",
             },
           ],
           name: "PollCreated",
@@ -180,32 +192,63 @@ const deployedContracts = {
               type: "uint256",
             },
           ],
-          name: "getPoll",
+          name: "getPollById",
           outputs: [
             {
-              internalType: "string",
-              name: "name",
-              type: "string",
+              components: [
+                {
+                  internalType: "string",
+                  name: "name",
+                  type: "string",
+                },
+                {
+                  internalType: "string",
+                  name: "prompt",
+                  type: "string",
+                },
+                {
+                  internalType: "string[]",
+                  name: "options",
+                  type: "string[]",
+                },
+                {
+                  internalType: "uint256",
+                  name: "endTime",
+                  type: "uint256",
+                },
+                {
+                  internalType: "bool",
+                  name: "exists",
+                  type: "bool",
+                },
+                {
+                  internalType: "address",
+                  name: "creator",
+                  type: "address",
+                },
+              ],
+              internalType: "struct VotingZKP.Poll",
+              name: "",
+              type: "tuple",
             },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
             {
-              internalType: "string",
-              name: "prompt",
-              type: "string",
+              internalType: "address",
+              name: "_creator",
+              type: "address",
             },
+          ],
+          name: "getPollsByCreator",
+          outputs: [
             {
-              internalType: "string[]",
-              name: "options",
-              type: "string[]",
-            },
-            {
-              internalType: "uint256",
-              name: "endTime",
-              type: "uint256",
-            },
-            {
-              internalType: "bool",
-              name: "exists",
-              type: "bool",
+              internalType: "uint256[]",
+              name: "",
+              type: "uint256[]",
             },
           ],
           stateMutability: "view",
@@ -291,6 +334,35 @@ const deployedContracts = {
               internalType: "bool",
               name: "exists",
               type: "bool",
+            },
+            {
+              internalType: "address",
+              name: "creator",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          name: "pollsByCreator",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
             },
           ],
           stateMutability: "view",
