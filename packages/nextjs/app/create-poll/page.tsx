@@ -22,6 +22,9 @@ const CreatePoll = () => {
   const handleCreatePoll = async () => {
     // Call your contract's createPoll function here
     try {
+      // Get the nonce of the chain
+        
+
         const tx = await writeContractAsync({
           functionName: "createPoll",
           args: [pollTitle,prompt,options, BigInt(timelimit)],

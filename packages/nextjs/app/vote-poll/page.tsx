@@ -1,4 +1,5 @@
 "use client";
+// Ignore type errors
 
 import { useState } from "react";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
@@ -7,7 +8,7 @@ import { ProviderNotFoundError, useAccount } from "wagmi";
 import { randomBytes } from "crypto";
 import { poseidon } from 'circomlib';
 import { utils } from 'ffjavascript';
-import snarkjs from 'snarkjs';
+import { groth16, zKey } from 'snarkjs';
 
 // Interface for vote inputs
 interface VoteInputs {
@@ -20,6 +21,7 @@ interface VoteInputs {
 
 // Utility to generate Poseidon hash
 export function generatePoseidonHash(inputs: any[]) {
+
     return utils.stringifyBigInts(poseidon(inputs));
 }
 // Generate voter commitment
@@ -65,7 +67,7 @@ export async function generateProofWithWitness(circuitInputs : VoteInputs) {
         console.log(witness);
 
         // Use witness to generate proof
-        const { proof, publicSignals } = await snarkjs.groth16.prove(
+        const { proof, publicSignals } = await groth16.prove(
         '../../../hardhat/circuits/build/voting_js/voting.wasm',  // WASM file
         '../../../hardhat/circuits/vote_final.zkey',  // Proving key
         witness          // Witness generated in previous step
@@ -74,11 +76,11 @@ export async function generateProofWithWitness(circuitInputs : VoteInputs) {
         console.log(publicSignals);
 
         // Verify the proof locally (optional but recommended)
-        const verificationKey = await snarkjs.zKey.exportVerificationKey(
+        const verificationKey = await zKey.exportVerificationKey(
         './vote_verifier.zkey'
       );
       
-      const isValid = await snarkjs.groth16.verify(
+      const isValid = await groth16.verify(
         verificationKey, 
         publicSignals, 
         proof
@@ -129,6 +131,7 @@ const VotePoll = () => {
   const [pollId, setPollId] = useState<number | null>(null);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [transactionHash, setTransactionHash] = useState<`0x${string}` | undefined>();
+  const { address: voterAddress } = useAccount();
 
   // Fetch poll data based on pollId
   const { data: pollData, isLoading, error } = useScaffoldReadContract({
@@ -143,7 +146,6 @@ const VotePoll = () => {
   const { writeContractAsync, isPending } = useScaffoldWriteContract("VotingZKP");
 
   const handleVote = async () => {
-    const { address: voterAddress } = useAccount();
     console.log(voterAddress);
     const secretSalt = generateRandomSalt(); // Generate secure random salt
     const randomness = generateRandomSalt();
@@ -165,24 +167,24 @@ const VotePoll = () => {
           functionName: "castVoteWithProof",
           args: [
             [
-                proof.pi_a[0],  // First coordinate of first group element
-                proof.pi_a[1]   // Second coordinate of first group element
+                BigInt(proof.pi_a[0]),  // First coordinate of first group element
+                BigInt(proof.pi_a[1])   // Second coordinate of first group element
             ], 
             [
                 [
-                  proof.pi_b[0][1],  // First coordinate of second group element
-                  proof.pi_b[0][0]   // Second coordinate of second group element
+                  BigInt(proof.pi_b[0][1]),  // First coordinate of second group element
+                  BigInt(proof.pi_b[0][0])   // Second coordinate of second group element
                 ],
                 [
-                  proof.pi_b[1][1],  // Third coordinate of second group element
-                  proof.pi_b[1][0]   // Fourth coordinate of second group element
+                  BigInt(proof.pi_b[1][1]),  // Third coordinate of second group element
+                  BigInt(proof.pi_b[1][0])   // Fourth coordinate of second group element
                 ]
             ], 
             [
-                proof.pi_c[0],  // First coordinate of third group element
-                proof.pi_c[1]   // Second coordinate of third group element
+                BigInt(proof.pi_c[0]),  // First coordinate of third group element
+                BigInt(proof.pi_c[1])   // Second coordinate of third group element
             ], 
-            [BigInt(pollId), BigInt(selectedOption), publicSignals[0], publicSignals[1]]],
+            [BigInt(pollId), BigInt(selectedOption), BigInt(publicSignals[0]), BigInt(publicSignals[1])]],
         });
         setTransactionHash(tx);
       } catch (error) {
