@@ -1,130 +1,10 @@
 "use client";
-// Ignore type errors
 
 import { useState } from "react";
+import { useAccount } from "wagmi";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
-import { ProviderNotFoundError, useAccount } from "wagmi";
-import { randomBytes } from "crypto";
-import { poseidon } from 'circomlib';
-import { utils } from 'ffjavascript';
-import { groth16, zKey } from 'snarkjs';
 
-// Interface for vote inputs
-interface VoteInputs {
-    pollId: number | null;
-    optionIndex: number | null;
-    voterCommitment: string;
-    secretSalt: string;
-    randomness: string;
-}
-
-// Utility to generate Poseidon hash
-export function generatePoseidonHash(inputs: any[]) {
-
-    return utils.stringifyBigInts(poseidon(inputs));
-}
-// Generate voter commitment
-export function generateVoterCommitment(voterAddress: string | undefined, secretSalt: string) {
-    return generatePoseidonHash([voterAddress, secretSalt]);
-}
-
-// Witness generation process
-export async function generateWitness(circuitInputs: VoteInputs) {
-    // 1. Prepare input object with all signals
-    const witnessInputs = {
-      // Public inputs
-      pollId: circuitInputs.pollId,
-      optionIndex: circuitInputs.optionIndex,
-      
-      // Private inputs (witness)
-      voterCommitment: circuitInputs.voterCommitment,
-      secretSalt: circuitInputs.secretSalt,
-      randomness: circuitInputs.randomness
-    };
-  
-    // 2. Use circuit wasm to generate witness
-    const witnessCalculator = require('../../../hardhat/circuits/build/voting_js/witness_calculator');
-    
-    const witness = await witnessCalculator.calculateWitness(witnessInputs);
-  
-    // 3. Witness typically starts with 1 as the first element (constraint system constant)
-    // and contains all computed intermediate and output signals
-    return witness;
-}
-  
-// Integrated proof generation with explicit witness step
-export async function generateProofWithWitness(circuitInputs : VoteInputs) {
-    try {
-        // Verify inputs are valid
-        if (!circuitInputs.pollId || circuitInputs.optionIndex === undefined || 
-            !circuitInputs.voterCommitment || !circuitInputs.secretSalt || !circuitInputs.randomness) {
-          throw new Error('Invalid inputs for vote proof');
-        }
-    
-        // Generate witness first
-        const witness = await generateWitness(circuitInputs);
-        console.log(witness);
-
-        // Use witness to generate proof
-        const { proof, publicSignals } = await groth16.prove(
-        '../../../hardhat/circuits/build/voting_js/voting.wasm',  // WASM file
-        '../../../hardhat/circuits/vote_final.zkey',  // Proving key
-        witness          // Witness generated in previous step
-        );
-        console.log(proof);
-        console.log(publicSignals);
-
-        // Verify the proof locally (optional but recommended)
-        const verificationKey = await zKey.exportVerificationKey(
-        './vote_verifier.zkey'
-      );
-      
-      const isValid = await groth16.verify(
-        verificationKey, 
-        publicSignals, 
-        proof
-      );
-  
-      if (!isValid) {
-        throw new Error('Proof generation failed verification');
-      }
-  
-      return {proof, publicSignals};
-    
-    }catch (error) {
-        console.error('Error in prepareVoteProof:', error);
-        throw error;
-    }
-}
- 
-// Utility to generate secure random salt
-export function generateRandomSalt() {
-    return randomBytes(32).toString();
-}
-
-export function formatProofForSubmission(proof: any) {
-    return {
-      a: [
-        proof.pi_a[0],  // First coordinate of first group element
-        proof.pi_a[1]   // Second coordinate of first group element
-      ],
-      b: [
-        [
-          proof.pi_b[0][1],  // First coordinate of second group element
-          proof.pi_b[0][0]   // Second coordinate of second group element
-        ],
-        [
-          proof.pi_b[1][1],  // Third coordinate of second group element
-          proof.pi_b[1][0]   // Fourth coordinate of second group element
-        ]
-      ],
-      c: [
-        proof.pi_c[0],  // First coordinate of third group element
-        proof.pi_c[1]   // Second coordinate of third group element
-      ],
-    };
-}
 
 
 const VotePoll = () => {
@@ -135,56 +15,22 @@ const VotePoll = () => {
 
   // Fetch poll data based on pollId
   const { data: pollData, isLoading, error } = useScaffoldReadContract({
-    contractName: "VotingZKP",
+    contractName: "Voting",
     functionName: "getPollById",
     args: [pollId !== null ? BigInt(pollId) : undefined],
     // enabled: pollId !== null, // Only fetch when pollId is set
   });
 
   
-
-  const { writeContractAsync, isPending } = useScaffoldWriteContract("VotingZKP");
+  const { writeContractAsync, isPending } = useScaffoldWriteContract("Voting");
 
   const handleVote = async () => {
-    console.log(voterAddress);
-    const secretSalt = generateRandomSalt(); // Generate secure random salt
-    const randomness = generateRandomSalt();
-
-    const voterCommitment = generateVoterCommitment(voterAddress, secretSalt);
-    const voteInputs = {
-        pollId: pollId, // Unique poll identifier
-        optionIndex: selectedOption,
-        voterCommitment,
-        secretSalt,
-        randomness
-    };
-
+    
     if (pollId !== null && selectedOption !== null) {
       try {
-        const { proof, publicSignals } = await generateProofWithWitness(voteInputs);
-        // const formattedProof = formatProofForSubmission(proof);
         const tx = await writeContractAsync({
-          functionName: "castVoteWithProof",
-          args: [
-            [
-                BigInt(proof.pi_a[0]),  // First coordinate of first group element
-                BigInt(proof.pi_a[1])   // Second coordinate of first group element
-            ], 
-            [
-                [
-                  BigInt(proof.pi_b[0][1]),  // First coordinate of second group element
-                  BigInt(proof.pi_b[0][0])   // Second coordinate of second group element
-                ],
-                [
-                  BigInt(proof.pi_b[1][1]),  // Third coordinate of second group element
-                  BigInt(proof.pi_b[1][0])   // Fourth coordinate of second group element
-                ]
-            ], 
-            [
-                BigInt(proof.pi_c[0]),  // First coordinate of third group element
-                BigInt(proof.pi_c[1])   // Second coordinate of third group element
-            ], 
-            [BigInt(pollId), BigInt(selectedOption), BigInt(publicSignals[0]), BigInt(publicSignals[1])]],
+          functionName: "castVote",
+          args: [BigInt(pollId), BigInt(selectedOption)],
         });
         setTransactionHash(tx);
       } catch (error) {
@@ -249,7 +95,7 @@ const VotePoll = () => {
             disabled={selectedOption === null || isPending}
             className="btn btn-primary mt-4 w-full"
           >
-            {isPending ? "Voting..." : "Cast Vote with Proof"}
+            {isPending ? "Voting..." : "Cast Vote"}
           </button>
 
         {transactionHash && (

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { parseEther } from "viem";
+import { isAddress, parseEther } from "viem";
+import { AddressInput } from "~~/components/scaffold-eth";
 import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
  // Assuming you're using wagmi for contract interaction
 // import YourContract from "~~/path/to/YourContract.json"; // Adjust the path to your contract's ABI
@@ -11,33 +12,62 @@ const CreatePoll = () => {
   const [options, setOptions] = useState(["", ""]); // Initial two options
   const [prompt, setPrompt] = useState("");
   const [timelimit, setTimelimit] = useState(0);
-  const [transactionHash, setTransactionHash] = useState<`0x${string}` | undefined>();
-  const { writeContractAsync, isPending } = useScaffoldWriteContract("VotingZKP");
 
-//   const contract = useContract({
-//     address: "YOUR_CONTRACT_ADDRESS", // Replace with your contract address
-//     abi: YourContract.abi,
-//   });
+  const [useNftAddress, setUseNftAddress] = useState(false);
+  const [nftAddress, setNftAddress] = useState("");
+  const [addressError, setAddressError] = useState("");
+
+  const [transactionHash, setTransactionHash] = useState<`0x${string}` | undefined>();
+  const { writeContractAsync, isPending } = useScaffoldWriteContract("Voting");
+
+  // Function to handle NFT address validation
+  const handleNftAddressChange = (address: string) => {
+    setNftAddress(address);
+    
+    // Validate address if toggle is on
+    if (useNftAddress) {
+      if (address === "") {
+        setAddressError("NFT address cannot be empty");
+        return;
+      }
+      
+      if (!isAddress(address)) {
+        setAddressError("Invalid Ethereum address");
+        return;
+      }
+      
+      // Clear any previous error if address is valid
+      setAddressError("");
+    }
+  };
 
   const handleCreatePoll = async () => {
-    // Call your contract's createPoll function here
-    try {
-      // Get the nonce of the chain
-        
+    // Determine the final NFT address to pass to contract
+    const finalNftAddress = useNftAddress && !addressError ? nftAddress : "0x0000000000000000000000000000000000000000";
 
-        const tx = await writeContractAsync({
-          functionName: "createPoll",
-          args: [pollTitle,prompt,options, BigInt(timelimit)],
-        });
-        setTransactionHash(tx); // Store the transaction hash
-        // Clear input fields
-        setPollTitle("");
-        setOptions(["", ""]); // Reset to initial two options
-        setPrompt("");
-        setTimelimit(0);
+    try {
+      const tx = await writeContractAsync({
+        functionName: "createPoll",
+        args: [
+          pollTitle, 
+          prompt, 
+          options, 
+          BigInt(timelimit), 
+          finalNftAddress
+        ],
+      });
+      
+      setTransactionHash(tx);
+      
+      // Reset form
+      setPollTitle("");
+      setOptions(["", ""]);
+      setPrompt("");
+      setTimelimit(0);
+      setNftAddress("");
+      setUseNftAddress(false);
     } catch (e) {
-        // Handle success or error
-        console.error("Error setting greeting", e);
+      console.error("Error creating poll", e);
     }
   };
 
@@ -81,19 +111,53 @@ const CreatePoll = () => {
           Add Option
         </button>
       )}
+
+      {/* NFT Address Toggle */}
+      <div className="flex items-center w-1/2 mb-2">
+        <label className="mr-2">Use NFT Address Restriction:</label>
+        <input 
+          type="checkbox" 
+          checked={useNftAddress}
+          onChange={() => {
+            setUseNftAddress(!useNftAddress);
+            // Reset address when toggling
+            setNftAddress("");
+            setAddressError("");
+          }}
+          className="toggle"
+        />
+      </div>
+
+      {/* Conditional NFT Address Input */}
+      {useNftAddress && (
+        <div className="w-1/2">
+          <AddressInput
+            placeholder="NFT Contract Address"
+            value={nftAddress}
+            onChange={handleNftAddressChange}
+          />
+          {addressError && (
+            <p className="text-red-500 text-sm mt-1">{addressError}</p>
+          )}
+        </div>
+      )}
+
       <input
         type="number"
         placeholder="Time Limit (in minutes)"
         onChange={(e) => setTimelimit(Number(e.target.value))}
         className="input w-1/2 mb-2"
       />
+
       <button onClick={handleCreatePoll} className="btn mt-4">Submit Poll</button>
+      
       {transactionHash && (
         <div className="mt-4">
           <h2>Transaction Hash:</h2>
           <p>{transactionHash}</p>
         </div>
       )}
+      
     </div>
   );
 };

@@ -21,13 +21,13 @@ const deployVotingContract: DeployFunction = async function (hre: HardhatRuntime
   */
   const { deployer } = await hre.getNamedAccounts();
   const { deploy } = hre.deployments;
-  const verifierContract = await hre.ethers.getContract<Contract>("Groth16Verifier", deployer);
+  // const verifierContract = await hre.ethers.getContract<Contract>("Groth16Verifier", deployer);
   
 
-  await deploy("VotingZKP", {
+  await deploy("Voting", {
     from: deployer,
     // Contract constructor arguments
-    args: [verifierContract.target],
+    args: [],
     log: true,
     // autoMine: can be passed to the deploy function to make the deployment process faster on local networks by
     // automatically mining the contract deployment transaction. There is no effect on live networks.
@@ -35,14 +35,14 @@ const deployVotingContract: DeployFunction = async function (hre: HardhatRuntime
   });
 
   // Get the deployed contract to interact with it after deploying.
-  const votingZKPContract = await hre.ethers.getContract<Contract>("VotingZKP", deployer);
+  const votingContract = await hre.ethers.getContract<Contract>("Voting", deployer);
   
   // Display the contract address after deployment
-  console.log("👋 Contract deployed at address:", votingZKPContract.target);
+  console.log("👋 Contract deployed at address:", votingContract.target);
 };
 
 export default deployVotingContract;
 
 // Tags are useful if you have multiple deploy files and only want to run one of them.
 // e.g. yarn deploy --tags YourContract
-deployVotingContract.tags = ["VotingZKP"];
+deployVotingContract.tags = ["Voting"];

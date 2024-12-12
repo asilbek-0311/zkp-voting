@@ -2,74 +2,76 @@
 
 import Link from "next/link";
 import type { NextPage } from "next";
-import { useAccount } from "wagmi";
+import { useAccount, UseReadContractReturnType } from "wagmi";
 import { BugAntIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 
+// Types
+interface Poll {
+  id: bigint;
+  name: string;
+  prompt: string;
+  options: string[];
+  endTime: bigint;
+  nftAddress: string;
+  exists: boolean;
+  creator: string;
+  voteCounts: bigint[];
+}
+
+type PollInfo = Omit<Poll, 'id' | 'voteCounts'>
+
+type ContractReturnType<T> = Omit<UseReadContractReturnType<unknown, unknown, unknown, unknown>, "data"> & { data: T }
+
+// Main component
 
 const Home: NextPage = () => {
 
-  // // Define the Poll type
-  // interface Poll {
-  //   voteCounts?: readonly bigint[];
-  //   isActive?: boolean;
-  //   name?: string;
-  //   prompt?: string;
-  //   options?: readonly string[];
-  //   endTime?: bigint;
-  //   exists?: boolean;
-  //   creator?: string;
-  //   id: bigint;
-  // }
+  const { address: connectedAddress } = useAccount();
+  const [userPolls, setUserPolls] = useState<Poll[]>([]);
 
-  // const { address: connectedAddress } = useAccount();
-  // console.log(connectedAddress);
-  // // const [userPolls, setUserPolls] = useState<Poll[]>([]);
+  const { data: pollIdsByCreator, isLoading: isLoadingPollIds } = useScaffoldReadContract({
+    contractName: "Voting",
+    functionName: "getPollsByCreator",
+    args: [connectedAddress],
+    watch: true,
+  }) as ContractReturnType<bigint[]>;
 
-  // const { data: pollIdsByCreator, isLoading: isLoadingPollIds } = useScaffoldReadContract({
-  //   contractName: "VotingZKP",
-  //   functionName: "getPollsByCreator",
-  //   args: [connectedAddress],
-  //   watch: true
-  // });
 
-  // // Use useMemo to create poll details more efficiently
-  // const userPolls = useMemo(() => {
-  //   if (!pollIdsByCreator) return [];
+  useEffect(() => {
+    const fetchPollDetails = async () => {
+      if (!pollIdsByCreator) return;
 
-  //   return pollIdsByCreator.map(pollId => {
-  //     // Use separate hooks for each poll detail
-  //     const {data: pollInfo, isLoading: isLoadingPollInfo } = useScaffoldReadContract({
-  //       contractName: "VotingZKP",
-  //       functionName: "getPollById",
-  //       args: [pollId],
-  //       watch: true
-  //     });
+      const pollsPromises = pollIdsByCreator.map(async (pollId) => {
+        const pollInfo = await useScaffoldReadContract({
+          contractName: "Voting",
+          functionName: "getPollById",
+          args: [pollId],
+        });
 
-  //     const { data: voteCounts, isLoading: isLoadingVoteCounts } = useScaffoldReadContract({
-  //       contractName: "VotingZKP",
-  //       functionName: "getVoteCounts",
-  //       args: [pollId],
-  //       watch: true
-  //     });
+        const voteCounts = await useScaffoldReadContract({
+          contractName: "Voting",
+          functionName: "getVoteCounts",
+          args: [pollId],
+        });
 
-  //     // Only return a complete poll if all data is loaded
-  //     if (isLoadingPollInfo || isLoadingVoteCounts) return null;
+        if (!pollInfo || !voteCounts) return null;
 
-  //     return {
-  //       id: pollId,
-  //       ...pollInfo,
-  //       voteCounts,
-  //       isActive: pollInfo?.exists ?? false
-  //     } as Poll;
-  //   }).filter(Boolean);  // Remove any null entries
-  // }, [pollIdsByCreator]);
+        return {
+          id: pollId,
+          ...pollInfo,
+          voteCounts,
+          isActive: pollInfo?.exists ?? false
+        } as Poll;
+      });
 
-  // // Loading and error states
-  // if (isLoadingPollIds) {
-  //   return <div>Loading polls...</div>;
-  // }
+      const polls = (await Promise.all(pollsPromises)).filter(Boolean);
+      setUserPolls(polls);
+    };
+
+    fetchPollDetails();
+  }, [pollIdsByCreator]);
 
   return (
     <>
@@ -86,26 +88,31 @@ const Home: NextPage = () => {
           </div>
         </div>
 
-        {/* <div>
-          <h2>Your Polls</h2>
-          {userPolls.length === 0 ? (
+        <div className="w-full max-w-2xl">
+          <h2 className="text-2xl mb-4">Your Polls</h2>
+          {isLoadingPollIds ? (
+            <p>Loading polls...</p>
+          ) : userPolls.length === 0 ? (
             <p>No polls found</p>
           ) : (
-            userPolls.map(poll => (
-              <div key={poll.id.toString()}>
-                <h3>{poll.name}</h3>
-                <p>Status: {poll.isActive ? 'Active' : 'Finished'}</p>
-                <div>
-                  {poll.options?.map((option, index) => (
-                    <div key={index}>
-                      {option}: {poll.voteCounts?.[index]?.toString() ?? '0'} votes
-                    </div>
-                  ))}
+            <div className="space-y-4">
+              {userPolls.map(poll => (
+                <div key={poll.id.toString()} className="bg-base-200 p-4 rounded-lg">
+                  <h3 className="text-xl font-semibold">{poll.name}</h3>
+                  <p className="text-sm">Status: {poll.isActive ? 'Active' : 'Finished'}</p>
+                  <div className="mt-2">
+                    {poll.options?.map((option, index) => (
+                      <div key={index} className="flex justify-between">
+                        <span>{option}:</span>
+                        <span>{poll.voteCounts?.[index]?.toString() ?? '0'} votes</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+            </div>
           )}
-        </div> */}
+        </div>
 
 
         <div className="flex-grow bg-base-300 w-full mt-16 px-8 py-12">
